@@ -12,12 +12,35 @@ export function useAuth() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user)
+    if (!auth) {
+      console.warn('Auth no está disponible, usando modo sin autenticación')
       setLoading(false)
-    })
+      return
+    }
 
-    return () => unsubscribe()
+    try {
+      const unsubscribe = onAuthStateChanged(auth, (user) => {
+        setUser(user)
+        setLoading(false)
+      }, (error) => {
+        console.error('Error en autenticación:', error)
+        setLoading(false)
+      })
+
+      // Timeout de seguridad - si después de 3 segundos no hay respuesta, dejar de cargar
+      const timeout = setTimeout(() => {
+        console.warn('Timeout en autenticación, continuando sin usuario')
+        setLoading(false)
+      }, 3000)
+
+      return () => {
+        unsubscribe()
+        clearTimeout(timeout)
+      }
+    } catch (error) {
+      console.error('Error inicializando autenticación:', error)
+      setLoading(false)
+    }
   }, [])
 
   const signIn = async (email, password) => {

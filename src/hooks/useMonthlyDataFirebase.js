@@ -67,28 +67,35 @@ export function useMonthlyDataFirebase() {
 
     if (!user) {
       // Si no hay usuario, usar localStorage como fallback
-      const saved = localStorage.getItem('currentMonthKey')
-      if (saved) setCurrentMonthKey(saved)
-      
-      const localBaseExpenses = localStorage.getItem('baseExpenses')
-      if (localBaseExpenses) {
-        try {
-          setBaseExpenses(JSON.parse(localBaseExpenses))
-        } catch (e) {
-          console.error(e)
+      try {
+        const saved = localStorage.getItem('currentMonthKey')
+        if (saved) setCurrentMonthKey(saved)
+        
+        const localBaseExpenses = localStorage.getItem('baseExpenses')
+        if (localBaseExpenses) {
+          try {
+            setBaseExpenses(JSON.parse(localBaseExpenses))
+          } catch (e) {
+            console.error('Error parsing baseExpenses:', e)
+            setBaseExpenses([])
+          }
         }
-      }
 
-      const localMonthlyData = localStorage.getItem('monthlyData')
-      if (localMonthlyData) {
-        try {
-          setAllMonthlyData(JSON.parse(localMonthlyData))
-        } catch (e) {
-          console.error(e)
+        const localMonthlyData = localStorage.getItem('monthlyData')
+        if (localMonthlyData) {
+          try {
+            setAllMonthlyData(JSON.parse(localMonthlyData))
+          } catch (e) {
+            console.error('Error parsing monthlyData:', e)
+            setAllMonthlyData({})
+          }
         }
-      }
 
-      setLoading(false)
+        setLoading(false)
+      } catch (error) {
+        console.error('Error loading from localStorage:', error)
+        setLoading(false)
+      }
       return
     }
 

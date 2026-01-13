@@ -41,6 +41,11 @@ function DebtItem({ debt, assignedAmount, percentage, onEdit, onDelete, isBaseEx
       <div className="debt-details">
         <div className="debt-info">
           <span className="debt-amount">Monto mensual: ${debt.amount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          {debt.paymentDay && (
+            <span className="debt-payment-day">
+              📅 Día de pago: {debt.paymentDay} de cada mes
+            </span>
+          )}
           <span className="debt-category" style={{ backgroundColor: categoryColors[debt.category] || categoryColors.otros }}>
             {debt.category}
           </span>

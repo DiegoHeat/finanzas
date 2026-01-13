@@ -1,0 +1,38 @@
+/* Estilos adicionales para el tour si es necesario */
+.react-joyride__tooltip {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+}
+
+.react-joyride__tooltip__main {
+  padding: 20px;
+}
+
+.react-joyride__tooltip__content {
+  margin-bottom: 15px;
+  line-height: 1.6;
+}
+
+.react-joyride__tooltip__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.react-joyride__button {
+  transition: all 0.2s ease;
+}
+
+.react-joyride__button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+@media (max-width: 768px) {
+  .react-joyride__tooltip {
+    max-width: 90vw;
+    margin: 10px;
+  }
+}

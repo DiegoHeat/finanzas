@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useAuth } from './hooks/useAuth'
 import { useMonthlyDataFirebase } from './hooks/useMonthlyDataFirebase'
+import { useToast } from './hooks/useToast'
 import Auth from './components/Auth'
 import MonthSelector from './components/MonthSelector'
 import SalaryInput from './components/SalaryInput'
@@ -8,9 +9,20 @@ import DebtForm from './components/DebtForm'
 import DebtList from './components/DebtList'
 import DistributionChart from './components/DistributionChart'
 import ExportPDF from './components/ExportPDF'
+import Dashboard from './components/Dashboard'
+import ToastContainer from './components/ToastContainer'
+import UpcomingPayments from './components/UpcomingPayments'
 
 function App() {
   const { user, loading: authLoading, logout } = useAuth()
+  const { toasts, removeToast, success, error, warning } = useToast()
+  
+  // Tour deshabilitado temporalmente - usar valores por defecto
+  const runTour = false
+  const isFirstTime = false
+  const stopTour = () => {}
+  const startTour = () => {}
+  
   const {
     currentMonthKey,
     currentMonthData,
@@ -25,6 +37,32 @@ function App() {
   const [editingExpense, setEditingExpense] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [isEditingBaseExpense, setIsEditingBaseExpense] = useState(false)
+  
+  // Timeouts - deben estar ANTES de cualquier return condicional
+  const [authTimeout, setAuthTimeout] = useState(false)
+  const [dataTimeout, setDataTimeout] = useState(false)
+  const hasShownWarning = useRef(false)
+
+  // TODOS los useEffect deben estar ANTES de cualquier return condicional
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (authLoading) {
+        console.warn('Timeout en autenticación, continuando...')
+        setAuthTimeout(true)
+      }
+    }, 3000)
+    return () => clearTimeout(timer)
+  }, [authLoading])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (dataLoading) {
+        console.warn('Timeout cargando datos, continuando...')
+        setDataTimeout(true)
+      }
+    }, 3000)
+    return () => clearTimeout(timer)
+  }, [dataLoading])
 
   const weeks = currentMonthData.weeks || []
   const expenses = currentMonthData.expenses || []
@@ -91,6 +129,24 @@ function App() {
     return expenses.reduce((sum, expense) => sum + expense.amount, 0)
   }, [expenses])
 
+  // Mostrar alertas si hay problemas financieros (solo una vez)
+  // Este useEffect debe estar después de los cálculos pero antes de los returns
+  useEffect(() => {
+    if (totalWeeklyNeeded > 0 && averageWeeklySalary > 0 && !hasShownWarning.current) {
+      const weeklyBalance = averageWeeklySalary - totalWeeklyNeeded
+      if (weeklyBalance < 0) {
+        setTimeout(() => {
+          warning(`Atención: Necesitas $${Math.abs(weeklyBalance).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} más por semana`)
+          hasShownWarning.current = true
+        }, 2000)
+      }
+    }
+    // Reset cuando cambian los valores significativamente
+    if (Math.abs(averageWeeklySalary - totalWeeklyNeeded) > 100) {
+      hasShownWarning.current = false
+    }
+  }, [totalWeeklyNeeded, averageWeeklySalary, warning])
+
   // Funciones para gestionar semanas
   const handleAddWeek = (amount) => {
     const newWeek = {
@@ -102,6 +158,7 @@ function App() {
       ...prev,
       weeks: [...(prev.weeks || []), newWeek]
     }))
+    success(`Semana guardada: $${amount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
   }
 
   const handleDeleteWeek = (weekId) => {
@@ -110,6 +167,7 @@ function App() {
         ...prev,
         weeks: (prev.weeks || []).filter(w => w.id !== weekId)
       }))
+      success('Semana eliminada')
     }
   }
 
@@ -138,6 +196,7 @@ function App() {
         }))
         setEditingExpense(null)
         setIsEditingBaseExpense(false)
+        success('Gasto de plantilla actualizado')
       } else {
         // Agregar nuevo gasto base
         const newExpense = {
@@ -154,6 +213,7 @@ function App() {
             monthKey: currentMonthKey
           }]
         }))
+        success('Gasto agregado a la plantilla')
       }
     } else {
       // Editar gasto del mes actual
@@ -163,12 +223,14 @@ function App() {
           expenses: (prev.expenses || []).map(e => e.id === expense.id ? expense : e)
         }))
         setEditingExpense(null)
+        success('Gasto actualizado')
       } else {
         // Agregar nuevo gasto solo al mes actual
         updateCurrentMonthData(prev => ({
           ...prev,
           expenses: [...(prev.expenses || []), expense]
         }))
+        success('Gasto agregado')
       }
     }
     setShowForm(false)
@@ -192,6 +254,7 @@ function App() {
             return baseId !== String(expenseId)
           })
         }))
+        success('Gasto eliminado de la plantilla')
       }
     } else {
       if (window.confirm('¿Estás seguro de que quieres eliminar este gasto de este mes?')) {
@@ -199,6 +262,7 @@ function App() {
           ...prev,
           expenses: (prev.expenses || []).filter(e => e.id !== expenseId)
         }))
+        success('Gasto eliminado')
       }
     }
   }
@@ -212,7 +276,21 @@ function App() {
   const handleCancelForm = () => {
     setEditingExpense(null)
     setShowForm(false)
+    setIsEditingBaseExpense(false)
   }
+
+  // Cerrar modal con tecla Escape
+  useEffect(() => {
+    if (!showForm || !editingExpense) return
+    
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        handleCancelForm()
+      }
+    }
+    window.addEventListener('keydown', handleEscape)
+    return () => window.removeEventListener('keydown', handleEscape)
+  }, [showForm, editingExpense]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLogout = async () => {
     if (window.confirm('¿Estás seguro de que quieres cerrar sesión?')) {
@@ -220,8 +298,7 @@ function App() {
     }
   }
 
-  // Mostrar pantalla de carga mientras se verifica autenticación
-  if (authLoading) {
+  if (authLoading && !authTimeout) {
     return (
       <div className="app">
         <div style={{ 
@@ -244,18 +321,21 @@ function App() {
   }
 
   // Mostrar pantalla de carga mientras se cargan los datos
-  if (dataLoading) {
+  if (dataLoading && !dataTimeout) {
     return (
       <div className="app">
         <div style={{ 
           display: 'flex', 
+          flexDirection: 'column',
           justifyContent: 'center', 
           alignItems: 'center', 
           minHeight: '100vh',
           fontSize: '1.2rem',
-          color: '#666'
+          color: '#666',
+          gap: '20px'
         }}>
-          Cargando tus datos...
+          <div>Cargando tus datos...</div>
+          <div style={{ fontSize: '0.9rem', color: '#999' }}>Si esto tarda mucho, hay un problema</div>
         </div>
       </div>
     )
@@ -263,6 +343,29 @@ function App() {
 
   return (
     <div className="app">
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+      {/* Tour deshabilitado temporalmente para debugging */}
+      {/* {!dataLoading && runTour && <UserTour run={runTour} onComplete={stopTour} />} */}
+      {/* {!dataLoading && isFirstTime && !runTour && (
+        <div className="tour-welcome" onClick={(e) => {
+          if (e.target.classList.contains('tour-welcome')) {
+            stopTour()
+          }
+        }}>
+          <div className="tour-welcome-content" onClick={(e) => e.stopPropagation()}>
+            <h2>¡Bienvenido! 👋</h2>
+            <p>Te guiaremos por la aplicación para que aprendas a usarla.</p>
+            <div className="tour-welcome-actions">
+              <button onClick={startTour} className="btn-tour-start">
+                Iniciar Tour
+              </button>
+              <button onClick={stopTour} className="btn-tour-skip">
+                Saltar
+              </button>
+            </div>
+          </div>
+        </div>
+      )} */}
       <header className="app-header">
         <div className="header-content">
           <div>
@@ -291,12 +394,36 @@ function App() {
 
       <main className="app-main">
         <section className="month-selector-section">
-          <MonthSelector 
+          <div className="month-selector">
+            <MonthSelector 
+              currentMonthKey={currentMonthKey}
+              onChangeMonth={handleChangeMonth}
+              availableMonths={availableMonths}
+            />
+          </div>
+        </section>
+
+        <section className="dashboard-section">
+          <div className="dashboard">
+            <Dashboard
+              totalMonthlyIncome={totalMonthlyIncome}
+              totalMonthlyExpenses={totalMonthlyExpenses}
+              averageWeeklySalary={averageWeeklySalary}
+              totalWeeklyNeeded={totalWeeklyNeeded}
+              weeks={weeks}
+              fridaysInMonth={fridaysInMonth}
+              expenses={expenses}
+            />
+          </div>
+        </section>
+
+        <section className="upcoming-payments-section">
+          <UpcomingPayments 
+            expenses={expenses}
             currentMonthKey={currentMonthKey}
-            onChangeMonth={handleChangeMonth}
-            availableMonths={availableMonths}
           />
         </section>
+
         <section className="salary-section">
           <SalaryInput 
             weeks={weeks}
@@ -335,14 +462,38 @@ function App() {
           </div>
 
           {showForm && (
-            <div className="form-container">
-              <DebtForm 
-                debt={editingExpense}
-                onSave={handleAddExpense}
-                onCancel={handleCancelForm}
-                isBaseExpense={isEditingBaseExpense}
-              />
-            </div>
+            <>
+              {editingExpense ? (
+                // Modal para edición
+                <div className="modal-overlay" onClick={handleCancelForm}>
+                  <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                    <button 
+                      className="modal-close-btn" 
+                      onClick={handleCancelForm}
+                      aria-label="Cerrar"
+                    >
+                      ×
+                    </button>
+                    <DebtForm 
+                      debt={editingExpense}
+                      onSave={handleAddExpense}
+                      onCancel={handleCancelForm}
+                      isBaseExpense={isEditingBaseExpense}
+                    />
+                  </div>
+                </div>
+              ) : (
+                // Formulario normal para agregar nuevo
+                <div className="form-container">
+                  <DebtForm 
+                    debt={editingExpense}
+                    onSave={handleAddExpense}
+                    onCancel={handleCancelForm}
+                    isBaseExpense={isEditingBaseExpense}
+                  />
+                </div>
+              )}
+            </>
           )}
 
           <DebtList 
