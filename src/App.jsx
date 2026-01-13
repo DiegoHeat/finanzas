@@ -1,5 +1,7 @@
 import { useState, useMemo } from 'react'
-import { useMonthlyData } from './hooks/useMonthlyData'
+import { useAuth } from './hooks/useAuth'
+import { useMonthlyDataFirebase } from './hooks/useMonthlyDataFirebase'
+import Auth from './components/Auth'
 import MonthSelector from './components/MonthSelector'
 import SalaryInput from './components/SalaryInput'
 import DebtForm from './components/DebtForm'
@@ -8,6 +10,7 @@ import DistributionChart from './components/DistributionChart'
 import ExportPDF from './components/ExportPDF'
 
 function App() {
+  const { user, loading: authLoading, logout } = useAuth()
   const {
     currentMonthKey,
     currentMonthData,
@@ -15,8 +18,9 @@ function App() {
     changeMonth,
     availableMonths,
     baseExpenses,
-    updateBaseExpenses
-  } = useMonthlyData()
+    updateBaseExpenses,
+    loading: dataLoading
+  } = useMonthlyDataFirebase()
 
   const [editingExpense, setEditingExpense] = useState(null)
   const [showForm, setShowForm] = useState(false)
@@ -210,6 +214,53 @@ function App() {
     setShowForm(false)
   }
 
+  const handleLogout = async () => {
+    if (window.confirm('¿Estás seguro de que quieres cerrar sesión?')) {
+      await logout()
+    }
+  }
+
+  // Mostrar pantalla de carga mientras se verifica autenticación
+  if (authLoading) {
+    return (
+      <div className="app">
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          minHeight: '100vh',
+          fontSize: '1.2rem',
+          color: '#666'
+        }}>
+          Cargando...
+        </div>
+      </div>
+    )
+  }
+
+  // Mostrar pantalla de autenticación si no hay usuario
+  if (!user) {
+    return <Auth />
+  }
+
+  // Mostrar pantalla de carga mientras se cargan los datos
+  if (dataLoading) {
+    return (
+      <div className="app">
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          minHeight: '100vh',
+          fontSize: '1.2rem',
+          color: '#666'
+        }}>
+          Cargando tus datos...
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="app">
       <header className="app-header">
@@ -217,6 +268,12 @@ function App() {
           <div>
             <h1>💰 Gestión de Finanzas</h1>
             <p>Distribuye tu sueldo semanal para cubrir todos tus gastos mensuales</p>
+            <div className="user-info">
+              <span className="user-email">{user.email}</span>
+              <button onClick={handleLogout} className="btn-logout">
+                Cerrar Sesión
+              </button>
+            </div>
           </div>
           <ExportPDF
             monthKey={currentMonthKey}
